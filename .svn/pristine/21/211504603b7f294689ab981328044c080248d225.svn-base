@@ -1,0 +1,717 @@
+<template>
+    <div class="v-home">
+        <!-- 加载中 -->
+        <div class="load_cover" v-if="showLoading">
+            <van-loading type="spinner" color="#1989fa" />
+        </div>
+        <!-- 商品图片轮播 margin-top:14px;-->
+        <van-swipe :stop-propagation="propagation" :autoplay="3000" id="swipeimg" :style="{height: screenWidth}" @change="onChange" v-if="goodShow && detail != null && picNumber > 0">
+            <van-swipe-item v-for="(item, index) in pictureList" :key="index">
+                <a class="img-vertical-center"><img id="viewImg" @click="lookImg(pictureList, index)" :src="item" alt="img" /></a>
+            </van-swipe-item>
+            <div class="custom-indicator" slot="indicator">
+                {{ current + 1 }}/{{picNumber}}
+            </div>
+        </van-swipe>
+        <!-- 商品信息-->
+        <div class="layout good-detail" v-if="detail != null && detail.goodsName">
+            <div class="_title">{{detail.goodsName}}</div>
+            <div class="_price" v-if="showLoading == false"><em>¥</em>{{detail.price | numFilter}}</div>
+        </div>
+        <!-- 灰色间隔-->
+        <div class="gray" v-if="detail != null && detail.goodsName"></div>
+        <!-- 溯源信息-->
+        <div class="layout source-detail" v-if="detail != null && detail.goodsName">
+            <!-- <van-row class="_info">
+		        <van-col class="info-label" span="6">溯源码</van-col>
+		        <van-col span="18">{{detail.sourceCode}}</van-col>
+		    </van-row> -->
+            <van-row class="_info">
+                <van-col class="info-label" span="6">商品编码</van-col>
+                <van-col span="18">{{detail.code}}</van-col>
+            </van-row>
+            <van-row class="_info" v-if="detail.brandName">
+                <van-col class="info-label" span="6">商品品牌</van-col>
+                <van-col span="18">{{detail.brandName }}</van-col>
+            </van-row>
+            <van-row class="_info">
+                <van-col class="info-label" span="6">商品规格</van-col>
+                <van-col span="18">
+                    <span v-for="(item,index) in goodSpec.goodsSpecData" :key="index">
+                        {{goodSpec['attrValue'+index]}}
+                        <span v-if="goodSpec.goodsSpecData.length > 1 && index + 1 < goodSpec.goodsSpecData.length">/</span>
+                    </span>
+                </van-col>
+            </van-row>
+            <van-row class="_info" v-if="detail.provinceName">
+                <van-col class="info-label" span="6">商品产地</van-col>
+                <van-col span="18">{{detail.provinceName}}{{detail.cityName}}{{detail.countyName}}</van-col>
+            </van-row>
+        </div>
+        <!-- 只显示溯源码-->
+        <div class="layout chain-detail" :style="note2" v-if="detail!= null && !chainShow">
+            <van-row class="_info" style="margin-top:15px;">
+                <van-col class="info-label" span="10">全球唯一身份编码</van-col>
+                <van-col class="circle" span="2">总</van-col>
+                <van-col class="fillet" span="10"> {{detail.sourceNumber}}个</van-col>
+            </van-row>
+            <van-row class="_info" style="margin-bottom:20px;">
+                <van-col span="24">{{detail.sourceCode}}</van-col>
+            </van-row>
+        </div>
+        <!-- 区块链信息-->
+        <div class="layout chain-detail" :style="note" v-if="detail!= null && chainShow">
+            <router-link :to="{name:'check',query:{sourceCode:$route.query.sourceCode}}">
+                <van-row class="_info" style="margin-top:15px;">
+                    <van-col class="info-label" span="10">全球唯一身份编码</van-col>
+                    <van-col class="circle" span="2">总</van-col>
+                    <van-col class="fillet" span="10"> {{detail.sourceNumber}}个</van-col>
+                </van-row>
+                <van-row class="_info" style="margin-bottom:20px;">
+                    <van-col span="24">{{detail.sourceCode}}</van-col>
+                </van-row>
+                <van-row class="_info" v-if="chain.hashCode">
+                    <van-col class="info-label" span="10">区块链哈希值</van-col>
+                </van-row>
+                <van-row class="_info hash" style="margin-bottom:20px;" v-if="chain.hashCode">
+                    <van-col span="22">{{chain.hashCode}}</van-col>
+                </van-row>
+                <van-row class="_info" v-if="chain.createDate">
+                    <van-col class="info-label" span="10">最新上链时间戳</van-col>
+                </van-row>
+                <van-row class="_info" style="margin:10px 0 20px;" v-if="chain.createDate">
+                    <van-col span="16">{{chain.createDate}}</van-col>
+                    <template v-if="isShowA">
+                        <van-col span="7" style="color:#108EE9;">防伪校验入口</van-col>
+                        <van-col span="1">
+                            <van-icon name="arrow" color="#969799" />
+                        </van-col>
+                    </template>
+
+                </van-row>
+            </router-link>
+        </div>
+        <!-- 灰色间隔-->
+        <div class="gray" v-if="chainShow == false && detail != null"></div>
+        <!-- 扫码统计-->
+        <div class="layout code-detail" v-if="detail!= null">
+            <router-link :to="{name:'code_detail',query:{sourceCode:$route.query.sourceCode}}">
+                <van-row class="_info">
+                    <van-col span="16" class="_title">扫码统计</van-col>
+                    <van-col span="6" class="scan">已扫码<em v-if="detail.sum">{{detail.sum}}</em><em v-else>0</em>次</van-col>
+                    <van-col span="2" style="text-align:center;">
+                        <van-icon name="arrow" color="#969799" />
+                    </van-col>
+                </van-row>
+            </router-link>
+        </div>
+        <!-- 灰色间隔-->
+        <div class="gray" v-if="detail != null && detail.sum"></div>
+        <!-- 品牌商信息-->
+        <div class="layout producer-detail" v-if="detail!=null && detail.brandCompany && detail.brandCompanyAddress ">
+            <van-collapse v-model="activeBrand">
+                <van-collapse-item name="1">
+                    <div slot="title"><img src='@/assets/img/icon_pinpai.png'><span>品牌商</span></div>
+                    <van-row gutter="20" class="line-row">
+                        <van-col class="info-label" span="7">品牌商名称</van-col>
+                        <van-col span="17" class="van-multi-ellipsis--l2">{{detail.brandCompany}}</van-col>
+                    </van-row>
+                    <van-row gutter="20" class="line-row">
+                        <van-col class="info-label" span="7">品牌商地址</van-col>
+                        <van-col span="17" class="van-multi-ellipsis--l2">{{detail.brandCompanyAddress}}</van-col>
+                    </van-row>
+                </van-collapse-item>
+            </van-collapse>
+        </div>
+        <!-- 灰色间隔-->
+        <div class="gray" v-if=" detail != null && detail.brandCompany"></div>
+        <!-- 供应商信息-->
+        <div class="layout producer-detail" v-if="detail!=null">
+            <van-collapse v-model="activeProd">
+                <van-collapse-item name="1">
+                    <div slot="title"><img src='@/assets/img/icon_producer.png'><span>供应商</span></div>
+                    <!-- 企业介绍-->
+                    <div class="company-info">
+                        <router-link :to="{name:'company_info',query:{supplierId:this.detail.supplierId,supplierName:this.detail.supplierName}}">
+                            <van-row>
+                                <van-col :span="6">
+                                    <van-image radius="5px" width="60px" height="60px" :src="detail.photo">
+                                        <template v-slot:error></template>
+                                    </van-image>
+                                </van-col>
+                                <van-col :span="17">
+                                    <div class="_title">企业介绍</div>
+                                    <div class="_info van-multi-ellipsis--l2">{{detail.companyDescription}}</div>
+                                </van-col>
+                                <van-col span="1">
+                                    <van-icon style="margin-top:30px;" name="arrow" color="#969799" />
+                                </van-col>
+                            </van-row>
+                        </router-link>
+                    </div>
+                    <van-row class="_info" style="margin-top:10px;">
+                        <van-col class="info-label" span="7">供应商名称</van-col>
+                        <van-col span="17" class="van-multi-ellipsis--l2">{{detail.supplierName}}</van-col>
+                    </van-row>
+                    <van-row class="_info">
+                        <van-col class="info-label" span="7">供应商地址</van-col>
+                        <van-col span="17" class="van-multi-ellipsis--l2">{{detail.supplierAddress}}</van-col>
+                    </van-row>
+                    <van-row class="_info" v-if="detail.warehouseName">
+                        <van-col class="info-label" span="7">发货仓库</van-col>
+                        <van-col span="17" class="van-multi-ellipsis--l2">{{detail.warehouseName}}</van-col>
+                    </van-row>
+                    <van-row class="_info" v-if="detail.warehouseAddress">
+                        <van-col class="info-label" span="7">发货地址</van-col>
+                        <van-col span="17" class="van-multi-ellipsis--l2">{{detail.warehouseAddress}}</van-col>
+                    </van-row>
+                    <div class="_info" v-if="this.exclusiveName">
+                        <van-row class="_title">
+                            <van-col span="24">供应商客服电话</van-col>
+                        </van-row>
+                        <van-row gutter="20" style="margin-top:10px;">
+                            <van-col class="info-label" span="4">姓名</van-col>
+                            <van-col class="info-content-short" style="word-break: break-all;" span="6">{{exclusiveName}}</van-col>
+                            <van-col class="info-label" span="6">联系电话</van-col>
+                            <van-col span="8" class="phone" @click="callPhone(exclusiveIphoe)">
+                                {{exclusiveIphoe}}
+                            </van-col>
+                        </van-row>
+                    </div>
+                    <div class="_info" v-if="this.operateName">
+                        <van-row class="_title">
+                            <van-col span="24">官方服务热线</van-col>
+                        </van-row>
+                        <van-row gutter="20" style="margin-top:10px;">
+                            <van-col class="info-label" span="4">姓名</van-col>
+                            <van-col class="info-content-short" style="word-break: break-all;" span="6">{{operateName}}</van-col>
+                            <van-col class="info-label" span="6">联系电话</van-col>
+                            <van-col span="8" class="phone" @click="callPhone(operateIphone)">
+                                {{operateIphone}}
+                            </van-col>
+                        </van-row>
+                    </div>
+                </van-collapse-item>
+            </van-collapse>
+        </div>
+        <!-- 灰色间隔-->
+        <div class="gray" v-if="detail!=null && detail.retailerName &&infoShow"></div>
+        <!-- 零售商信息-->
+        <div class="layout producer-detail" v-if="detail!=null && detail.retailerName && infoShow">
+            <van-collapse v-model="activeRetail">
+                <van-collapse-item name="1">
+                    <div slot="title"><img src='@/assets/img/icon_shopkeeper.png'><span>零售商</span></div>
+                    <van-row gutter="20" v-if="detail.retailerName" class="line-row">
+                        <van-col class="info-label" span="7">零售商名称</van-col>
+                        <van-col span="17" class="van-multi-ellipsis--l2">{{detail.retailerName}}</van-col>
+                    </van-row>
+                    <van-row gutter="20" v-if="detail.retailerAddress" class="line-row" style="margin-bottom:10px;">
+                        <van-col class="info-label" span="7">零售商地址</van-col>
+                        <van-col span="17" class="van-multi-ellipsis--l2">{{detail.retailerAddress}}</van-col>
+                    </van-row>
+                </van-collapse-item>
+            </van-collapse>
+        </div>
+        <!-- 灰色间隔-->
+        <div class="gray" v-if="infoShow && detail!=null"></div>
+        <!-- 经销商信息-->
+        <div class="layout producer-detail" v-if="detail!=null && dealerName && detail.orderInfo && infoShow">
+            <van-collapse v-model="activeDistr">
+                <van-collapse-item name="1">
+                    <div slot="title"><img src='@/assets/img/icon_distr.png'><span>经销商</span></div>
+                    <van-row gutter="20" class="line-row">
+                        <van-col class="info-label" span="7">经销商名称</van-col>
+                        <van-col span="17" class="van-multi-ellipsis--l2">{{dealerName}}</van-col>
+                    </van-row>
+                    <van-row gutter="20" class="line-row">
+                        <van-col class="info-label" span="7">经销商地址</van-col>
+                        <van-col span="17" class="van-multi-ellipsis--l2">{{dealerAddress}}</van-col>
+                    </van-row>
+                </van-collapse-item>
+            </van-collapse>
+        </div>
+        <!-- 灰色间隔-->
+        <div class="gray" v-if="detail!=null && dealerName && infoShow"></div>
+        <!-- 订单信息-->
+        <div class="layout producer-detail" v-if="infoShow&&detail!=null">
+            <van-collapse v-model="activeOrder">
+                <van-collapse-item name="1">
+                    <div slot="title"><img src='@/assets/img/icon_order.png'><span>订单信息</span></div>
+                    <van-row gutter="20" class="line-row">
+                        <van-col class="info-label" span="7">订单编号</van-col>
+                        <van-col span="17" style="word-break: break-all;">{{detail.orderInfo.id}}</van-col>
+                    </van-row>
+                    <van-row gutter="20" class="line-row">
+                        <van-col class="info-label" span="7">买家姓名</van-col>
+                        <van-col span="17" class="van-multi-ellipsis--l2">{{detail.orderInfo.buyerName}}</van-col>
+                    </van-row>
+                    <van-row gutter="20" class="line-row">
+                        <van-col class="info-label" span="7">手机号码</van-col>
+                        <van-col span="17">{{detail.orderInfo.buyerAccount}}</van-col>
+                    </van-row>
+                    <van-row gutter="20" class="line-row">
+                        <van-col class="info-label" span="7">下单时间</van-col>
+                        <van-col span="17">{{detail.orderInfo.orderTime | formatDate}}</van-col>
+                    </van-row>
+                    <van-row gutter="20" class="line-row">
+                        <van-col class="info-label" span="7">支付方式</van-col>
+                        <van-col span="17" v-if="detail.orderInfo.payType == '0'">汇付天下</van-col>
+                        <van-col span="17" v-else>线下转账</van-col>
+                    </van-row>
+                </van-collapse-item>
+            </van-collapse>
+        </div>
+    </div>
+</template>
+
+<script>
+import { getSourceInfo, querySource, selectHash } from '@/api/index.js'
+import { ImagePreview } from 'vant';
+import { getUrlParam, getQueryString } from "@/utils/auth";
+
+export default {
+    props: {
+        isSourceReq: {
+            type: Boolean,
+            default: () => false
+        },
+        isShowA: {
+            type: Boolean,
+            default: () => true
+        }
+    },
+    data () {
+        return {
+            nav: '溯源信息',
+            current: 0,
+            activeProd: ['1'],
+            activeRetail: ['1'],
+            activeOrder: ['1'],
+            activeDistr: ['1'],
+            activeBrand: ['1'],
+            pictureList: [],
+            note: {
+                backgroundImage: "url(" + require("@/assets/img/source_bg2.png") + ")",
+                backgroundRepeat: "no-repeat",
+                backgroundSize: "100% auto",
+            },
+            note2: {
+                backgroundImage: "url(" + require("@/assets/img/source_bg3.png") + ")",
+                backgroundRepeat: "no-repeat",
+                backgroundSize: "100% 100%",
+            },
+            detail: {},//溯源信息
+            chain: {},//区块链信息
+            picNumber: 0,//图片数量
+            infoShow: false,//是否显示   
+            goodSpec: '',//商品规格 
+            sourceCode: '',//溯源码，全球唯一身份编码  
+            chainShow: false,//区块链信息是否显示 
+            orderId: '',//订单id 
+            showLoading: true,
+            exclusiveName: undefined,//生产商客服姓名
+            exclusiveIphoe: undefined,//生产商客服电话
+            operateName: undefined,//官方客服姓名
+            operateIphone: undefined,//官方客服电话 
+            goodShow: true,//是否显示商品信息 
+            dealerName: undefined,//经销商名称
+            dealerAddress: undefined,//经销商地址
+            propagation: false,//是否阻止滑动事件冒泡
+            authType: '',//是否是微信环境，0 其他 1微信
+            screenWidth: '375px',//手机屏幕的宽度，默认375
+        }
+    },
+    filters: {
+        numFilter (value) {
+            // 截取当前数据到小数点后两位
+            let realVal = parseFloat(value).toFixed(2)
+            return realVal
+        },
+        //将时间戳转换成日期格式
+        formatDate: function (value, arg1) {
+            if (typeof value == 'undefined') {
+                return ''
+            } else {
+                if (arg1 === 'h') {
+                    let date = new Date(value)
+                    let y = date.getFullYear()
+                    let MM = date.getMonth() + 1
+                    MM = MM < 10 ? '0' + MM : MM
+                    let d = date.getDate()
+                    d = d < 10 ? '0' + d : d
+                    let h = date.getHours()
+                    h = h < 10 ? '0' + h : h
+                    let m = date.getMinutes()
+                    m = m < 10 ? '0' + m : m
+                    let s = date.getSeconds()
+                    s = s < 10 ? '0' + s : s
+                    return y + '年' + MM + '月' + d + '日 ' + h + ':' + m + ':' + s
+                } else {
+                    let date = new Date(parseInt(value))
+                    let y = date.getFullYear()
+                    let MM = date.getMonth() + 1
+                    MM = MM < 10 ? '0' + MM : MM
+                    let d = date.getDate()
+                    d = d < 10 ? '0' + d : d
+                    let h = date.getHours()
+                    h = h < 10 ? '0' + h : h
+                    let m = date.getMinutes()
+                    m = m < 10 ? '0' + m : m
+                    let s = date.getSeconds()
+                    s = s < 10 ? '0' + s : s
+                    return y + '-' + MM + '-' + d + ' ' + h + ':' + m + ':' + s
+                }
+
+            }
+        }
+    },
+    mounted () {
+        this.init()
+    },
+    methods: {
+        //初始化
+        init () {
+            window.screenWidth = document.body.clientWidth
+            this.screenWidth = window.screenWidth + 'px'
+            let sourceCode = getUrlParam('sourceCode') || undefined;
+            this.sourceCode = sourceCode
+            this.chainReq()
+            if (this.isSourceReq) {
+                this.sourceReq()
+            }
+        },
+        //查看图片1
+        lookImg (pictureList, index) {
+            ImagePreview({ images: pictureList, startPosition: index })
+        },
+        // 调用拨号功能
+        callPhone (phoneNumber) {
+            window.location.href = 'tel://' + phoneNumber
+        },
+        //溯源信息展示
+        sourceReq () {
+            var that = this
+            let sourceCode = getUrlParam('sourceCode') || undefined;
+            //let sourceCode = window.location.search.slice(window.location.search.lastIndexOf('=') + 1)
+            //测试溯源码SYM200221134031000009（信息全）  SYM200226165452000001(只有商品信息，未出库) SYM200303155000000003(什么也没绑定)
+            //SYM200303093738000001(信息全)
+            //SYM200218173250000002 出库
+            //SYM200304185541000001 没有仓库,经销商
+            this.sourceCode = sourceCode
+            let params = {
+                sourceCode: sourceCode
+            }
+            getSourceInfo(params).then(data => {
+                let allData = data.substring(0, data.length - 1)
+                allData = allData.slice(9)
+                that.detail = JSON.parse(allData)
+
+                if (that.detail != null) {
+                    that.showLoading = false
+                    if (!that.detail.item) {
+                        //什么都没绑定
+                        that.goodShow = false
+                    }
+                    if (that.detail.item) {
+                        //商品信息
+                        that.detail.goodsName = that.detail.item.goodsName//商品名称
+                        that.detail.price = that.detail.item.price//订单价格
+                        if (that.detail.item.picPath) {
+                            that.pictureList = that.detail.item.picPath.split(',')
+                        }
+                        that.picNumber = that.pictureList.length
+                        that.detail.sourceCode = sourceCode
+                        that.detail.code = that.detail.item.code
+                        that.detail.provinceName = that.detail.item.provinceName
+                        that.detail.cityName = that.detail.item.cityName
+                        that.detail.countyName = that.detail.item.countyName
+
+                        if (!that.detail.item.brandName || that.detail.item.brandName === '') {
+                            that.detail.brandName = that.detail.item.reserve
+                        } else if (!that.detail.item.reserve || that.detail.item.reserve === '') {
+                            that.detail.brandName = that.detail.item.brandName
+                        } else {
+                            that.detail.brandName = that.detail.item.brandName
+                        }
+                        if (that.detail.item.attrSku) {
+                            that.goodSpec = JSON.parse(that.detail.item.attrSku) //商品规格
+                        }
+                    }
+                    //客服
+                    if (that.detail.userMap) {
+                        if (that.detail.userMap.exclusive === null) {
+                            that.exclusiveName = undefined
+                            that.exclusiveIphoe = undefined
+                        } else {
+                            that.exclusiveName = that.detail.userMap.exclusive.name
+                            that.exclusiveIphoe = that.detail.userMap.exclusive.iphone
+                        }
+                        if (that.detail.userMap.operational === null) {
+                            that.operateName = undefined
+                            that.operateIphone = undefined
+                        } else {
+                            that.operateName = that.detail.userMap.operational.name
+                            that.operateIphone = that.detail.userMap.operational.iphone
+                        }
+
+                        // exp === null
+                        // that.detail.userMap.exclusive.name ? that.exclusiveName = that.detail.userMap.exclusive.name : that.exclusiveName = undefined
+                        // that.detail.userMap.exclusive.iphone ? that.exclusiveIphoe = that.detail.userMap.exclusive.iphone : that.exclusiveIphoe = undefined
+                        // that.detail.userMap.operational.name ? that.operateName = that.detail.userMap.operational.name : that.operateName = undefined
+                        // that.detail.userMap.operational.iphone ? that.operateIphone = that.detail.userMap.operational.iphone : that.operateIphone = undefined
+                    }
+                    //出库仓库
+                    if (that.detail.wareHouseVO) {
+                        that.detail.warehouseName = that.detail.wareHouseVO.wareHouseName //发货仓库
+                        that.detail.warehouseAddress = that.detail.wareHouseVO.totalAddress//发货地址
+                    }
+                    // test
+                    // if(!that.isProduction && that.detail.orderInfo == undefined) {
+                    // that.detail.orderInfo = {
+                    // 	orderDealer: {
+                    // 		dealerName: '经销商名称',
+                    // 		address: '经销商地址'
+                    // 	},
+                    // 	id: '20190918881174164993277427712'
+                    // }
+                    // 	that.detail.wareHouse = {
+                    // 		warehouseName: '发货仓库',
+                    // 		address: '发货地址'
+                    // 	}
+                    // }
+                    //
+                    if (that.detail.orderInfo) {
+                        //订单信息
+                        that.infoShow = true
+                        if (that.detail.orderInfo.orderDealer) {
+                            that.dealerName = that.detail.orderInfo.orderDealer.dealerName //经销商名称
+                            that.dealerAddress = that.detail.orderInfo.orderDealer.address //经销商地址
+                        }
+                        if (that.detail.wareHouse) {
+                            that.detail.warehouseName = that.detail.wareHouse.warehouseName //发货仓库
+                            that.detail.warehouseAddress = that.detail.wareHouse.address//发货地址
+                        }
+                        //that.detail.producerName = that.detail.orderInfo.orderProducer.contacts//生产商姓名
+                        //that.detail.iphone = that.detail.orderInfo.orderProducer.iphone//生产商联系电话iphone     
+                        that.orderId = that.detail.orderInfo.id
+                        if (that.orderId != null) {
+                            // that.chainReq()
+                        }
+                    }
+                    this.$emit("setDetailVal", { detail: that.detail })
+                } else {
+                    that.showLoading = false
+                }
+            }).catch(err => {
+                //that.$toast.fail({ message: err.message })
+                that.showLoading = false
+            })
+        },
+        //区块链信息
+        chainReq () {
+            //this.orderId
+            let params = {
+                sourceCode: this.sourceCode
+            }
+            selectHash(params).then(data => {
+                if (data.data) {
+                    this.chain = data.data
+                    console.log(this.chain)
+                    this.chainShow = true
+                    this.$emit("setChainVal", { chain: this.chain, chainShow: this.chainShow })
+                    // this.$forceUpdate()
+                } else {
+                    this.chainShow = false
+                }
+            })
+        },
+        //轮播
+        onChange (index) {
+            this.current = index;
+        }
+    },
+    watch: {
+        isSourceReq: function (newVal, oldVal) {
+            if (newVal) {
+                this.sourceReq()
+            }
+        }
+    }
+}
+</script>
+
+
+<style scoped>
+.v-home .custom-indicator {
+    position: absolute;
+    right: 40px;
+    bottom: 20px;
+    padding: 8px 20px;
+    color: #fff;
+    font-size: 24px;
+    background: rgba(40, 51, 72, 0.5);
+    border-radius: 20px;
+    /* background: red; */
+}
+.good-detail {
+    padding: 40px;
+    background: #fff;
+}
+.good-detail ._title {
+    color: #283447;
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 50px;
+}
+.good-detail ._price {
+    color: #ff5a5f;
+    font-weight: 600;
+    font-size: 40px;
+    margin-top: 30px;
+}
+.good-detail ._price em {
+    font-size: 20px;
+}
+
+.chain-detail {
+    padding: 0 30px;
+}
+.chain-detail ._info {
+    font-size: 26px;
+    color: #283347;
+    margin-bottom: 20px;
+    width: 100%;
+    word-break: break-all;
+    line-height: 40px;
+}
+.chain-detail ._info .info-label {
+    color: #666;
+    line-height: 48px;
+}
+.chain-detail .fillet {
+    border: 1px solid #108ee9;
+    width: 228px;
+    height: 48px;
+    line-height: 46px;
+    border-radius: 24px;
+    color: #108ee9;
+    font-size: 26px;
+    padding-left: 10%;
+}
+.chain-detail .circle {
+    width: 48px;
+    height: 48px;
+    background: #108ee9;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 22px;
+    text-align: center;
+    line-height: 46px;
+    position: absolute;
+    left: 42%;
+}
+.chain-detail .hash {
+    width: 376px;
+}
+.producer-detail {
+    background: #fff;
+}
+.producer-detail img {
+    width: 50px;
+    height: 50px;
+    float: left;
+    padding-top: 4px;
+}
+.producer-detail span {
+    color: #283347;
+    font-size: 28px;
+    float: left;
+    margin: 5px 0 0 10px;
+    font-weight: 600;
+}
+.producer-detail ._info {
+    font-size: 26px;
+    color: #283347;
+    margin-bottom: 30px;
+    line-height: 40px;
+}
+.producer-detail ._info:last-child {
+    margin-bottom: 10px;
+}
+.producer-detail .info-label {
+    color: #666;
+}
+.producer-detail ._info ._title {
+    color: #283347;
+    font-size: 26px;
+    font-weight: 600;
+}
+.info-content-short {
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 160px;
+    white-space: nowrap;
+}
+.phone {
+    color: #108ee9;
+}
+.line-row {
+    margin-bottom: 30px;
+    color: #283347;
+    font-size: 26px;
+}
+.line-row:last-child {
+    margin-bottom: 10px;
+}
+
+.code-detail {
+    padding: 0 30px;
+    background: #fff;
+    height: 100px;
+    line-height: 100px;
+}
+.code-detail ._title {
+    color: #283347;
+    font-size: 28px;
+    font-weight: 600;
+}
+.code-detail em {
+    color: #ff5a5f;
+    font-size: 28px;
+}
+.scan {
+    font-size: 28px;
+}
+.company-info {
+    padding-bottom: 20px;
+    border-bottom: 1px solid #ebedf0;
+}
+.company-info ._title {
+    color: #283347;
+    font-size: 28px;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+.company-info ._info {
+    color: #666;
+    font-size: 24px;
+    line-height: 36px;
+}
+#swipeimg {
+    width: 100%;
+    text-align: center;
+}
+#viewImg {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    margin: 0 auto;
+}
+.van-multi-ellipsis--l2 {
+    white-space: nowrap;
+    width: 400px;
+    display: inline-block;
+}
+</style>

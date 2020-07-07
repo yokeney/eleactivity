@@ -1,0 +1,178 @@
+<template>
+    <div class="v-home">
+        <!-- 加载中 -->
+        <!-- <div class="load_cover" v-if="showLoading">
+		    <van-loading type="spinner" color="#1989fa" />
+		</div> -->
+        <Info :isSourceReq.sync='isSourceReq' :isShowA="isShowA" @setDetailVal="setDetailVal"></Info>
+        <!-- 灰色间隔-->
+        <div class="gray" v-if="detail!=null"></div>
+        <!-- 公众号二维码-->
+        <div class="layout QRcode">
+            <p class="into">进入公众号查看更多信息</p>
+            <p><img src="../assets/img/hszQDZ.jpg"></p>
+            <p class="follow">长按或扫码关注公众号</p>
+        </div>
+    </div>
+</template>
+
+<script>
+import { getSourceInfo, querySource, getAccessToken, showAuthPage, snsapiBase } from '@/api/index.js'
+import { ImagePreview } from 'vant';
+import { isWechat, getUrlParam, getQueryString } from "@/utils/auth";
+import Info from '@/components/info.vue'
+
+export default {
+    components: { Info },
+    data () {
+        return {
+            nav: '溯源信息',
+            showLoading: true,
+            authType: '',//是否是微信环境，0 其他 1微信
+            sourceCode: '',//溯源码
+            isSourceReq: false,
+            isShowA: true,
+            detail: {},//溯源信息
+        }
+    },
+    mounted () {
+        this.init()
+        //挂载完成后，判断浏览器是否支持popstate
+        if (window.history && window.history.pushState) {
+            history.pushState(null, null, document.URL);
+            window.addEventListener('popstate', this.goBack, false);
+        }
+    },
+    destroyed () {
+        window.removeEventListener('popstate', this.goBack, false);//页面销毁时，取消监听
+    },
+    methods: {
+        //初始化
+        init () {
+            var that = this
+            this.sourceCode = getUrlParam('sourceCode') || undefined;
+            isWechat() ? (this.authType = "1") : (this.authType = "0"); //是否是微信环境，0 其他 1微信
+            let flag = sessionStorage.getItem("flag"); //是否已经扫码
+            //如果不是微信环境
+            if (this.authType == "0") {
+                if (!flag) {
+                    getAccessToken({
+                        code: 'code',
+                        state: 'state',
+                        authType: this.authType,
+                        sourceCode: this.sourceCode,
+                        source: "0"
+                    }).then(res => {
+                        if (res.code == 200) {
+                            that.isSourceReq = true
+                        }
+                    });
+                } else {
+                    that.isSourceReq = true
+                }
+            } else {
+                if (!flag) {
+                    this.baseAuth() //静默授权 
+                } else {
+                    that.isSourceReq = true
+                }
+            }
+        },
+        //移动端返回键
+        goBack () {
+            if (this.authType == "1") {
+                WeixinJSBridge.call('closeWindow');
+            }
+        },
+        //静默授权
+        baseAuth () {
+            this.sourceCode = getUrlParam('sourceCode') || undefined;
+            let code = getUrlParam("code"); // 截取code
+            let domine = window.location.href.split("#")[0]; //获取当前地址
+            let state = getQueryString("state", domine); // 截取state
+
+            if (!code && this.authType == "1") {
+                snsapiBase({ sourceCode: this.sourceCode }).then(data => {
+                    if (data.data) {
+                        window.location.href = data.data;
+                        this.isSourceReq = true
+                    }
+                })
+            } else {
+                getAccessToken({
+                    code: code,
+                    state: state,
+                    authType: this.authType,
+                    sourceCode: this.sourceCode,//溯源码
+                    source: "0" //来源
+                }).then(res => {
+                    if (res.data) {
+                        this.wxAuthLogin()
+                    }
+                });
+            }
+        },
+        //非静默授权
+        wxAuthLogin () {
+            const token = localStorage.getItem('token')
+            const openid = localStorage.getItem('openid')
+            this.sourceCode = getUrlParam('sourceCode') || undefined;
+            let domine = window.location.href.split("#")[0]; //获取当前地址
+            let state = getQueryString("state", domine); // 截取state
+            let code = getUrlParam("code"); // 截取code
+
+            //微信授权
+            let way = getUrlParam("way"); // 截取way,判断是静默授权跳转
+            if (way == 'snsapi_base' || !code) {
+                showAuthPage({ sourceCode: this.sourceCode }).then(data => {
+                    if (data.data) {
+                        window.location.href = data.data;
+                        this.isSourceReq = true
+                    }
+                })
+            } else {
+                if (!token && !openid) {
+                    getAccessToken({
+                        code: code,
+                        state: state,
+                        authType: this.authType,//是否是微信环境，0 其他 1微信
+                        sourceCode: this.sourceCode,//溯源码
+                        source: "0" //来源
+                    }).then(res => {
+                        this.isSourceReq = true
+                    });
+                } else {
+                    this.isSourceReq = true
+                }
+            }
+        },
+        setDetailVal (params) {
+            this.detail = params.detail
+        }
+    }
+}
+</script>
+
+<style scoped>
+.QRcode {
+    background: #fff;
+    text-align: center;
+    padding: 30px;
+}
+.QRcode img {
+    width: 284px;
+    height: 284px;
+}
+.QRcode .into {
+    color: #1276f9;
+    font-size: 26px;
+    margin: 20px 0 30px;
+    font-weight: 600;
+}
+.QRcode .follow {
+    color: #666;
+    font-size: 24px;
+    margin: 20px 0 30px;
+}
+</style>
+
